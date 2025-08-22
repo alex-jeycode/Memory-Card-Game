@@ -57,3 +57,130 @@
   )
 )
 
+
+;; NEW DATA MAP: Track player statistics
+(define-map player-stats
+  { player: principal }
+  {
+    total-games: uint,
+    completed-games: uint,
+    total-moves: uint,
+    best-moves: uint,
+    total-rewards: uint
+  }
+)
+
+;; MODIFIED: Update start-game to track player stats
+(define-public (start-game)
+  (let
+    (
+      (game-id (+ (var-get game-counter) u1))
+      (shuffled-deck (list u1 u1 u2 u2 u3 u3 u4 u4 u5 u5 u6 u6 u7 u7 u8 u8))
+    )
+    (try! (stx-transfer? GAME_FEE tx-sender (as-contract tx-sender)))
+    (var-set game-counter game-id)
+    (map-set games
+      { game-id: game-id }
+      {
+        player: tx-sender,
+        moves: u0,
+        matches: u0,
+        status: "active",
+        start-time: block-height,
+        end-time: none,
+        revealed-cards: (list u0 u0 u0 u0 u0 u0 u0 u0 u0 u0 u0 u0 u0 u0 u0 u0),
+        card-positions: shuffled-deck
+      }
+    )
+    ;; NEW: Update player stats
+    (update-player-game-start tx-sender)
+    (ok game-id)
+  )
+)
+
+;; MODIFIED: Update check-match to track completion stats
+(define-public (check-match (game-id uint) (pos1 uint) (pos2 uint))
+  (let
+    (
+      (game (unwrap! (map-get? games { game-id: game-id }) ERR_GAME_NOT_FOUND))
+      (card1 (unwrap-panic (element-at (get card-positions game) pos1)))
+      (card2 (unwrap-panic (element-at (get card-positions game) pos2)))
+      (is-match (is-eq card1 card2))
+      (new-matches (if is-match (+ (get matches game) u1) (get matches game)))
+      (game-complete (is-eq new-matches u8))
+      (new-status (if game-complete "completed" "active"))
+    )
+    (asserts! (is-eq tx-sender (get player game)) ERR_UNAUTHORIZED)
+    (asserts! (is-eq (get status game) "active") ERR_GAME_FINISHED)
+    
+    (map-set games
+      { game-id: game-id }
+      (merge game {
+        matches: new-matches,
+        status: new-status,
+        end-time: (if game-complete (some block-height) none)
+      })
+    )
+    
+    (if game-complete
+      (let
+        (
+          (efficiency-bonus (/ u10000000 (get moves game)))
+          (base-reward u1000000)
+          (total-reward (+ base-reward efficiency-bonus))
+        )
+        (map-set game-rewards
+          { game-id: game-id }
+          { reward-amount: total-reward, claimed: false }
+        )
+        ;; NEW: Update player stats for completed game
+        (update-player-game-complete tx-sender (get moves game) total-reward)
+        (ok { match: is-match, completed: true, reward: total-reward })
+      )
+      (ok { match: is-match, completed: false, reward: u0 })
+    )
+  )
+)
+
+;; NEW FUNCTION: Get player statistics
+(define-read-only (get-player-stats (player principal))
+  (default-to 
+    { total-games: u0, completed-games: u0, total-moves: u0, best-moves: u0, total-rewards: u0 }
+    (map-get? player-stats { player: player })
+  )
+)
+
+;; NEW HELPER: Update player stats when starting a game
+(define-private (update-player-game-start (player principal))
+  (let
+    (
+      (current-stats (get-player-stats player))
+    )
+    (map-set player-stats
+      { player: player }
+      (merge current-stats {
+        total-games: (+ (get total-games current-stats) u1)
+      })
+    )
+  )
+)
+
+;; NEW HELPER: Update player stats when completing a game
+(define-private (update-player-game-complete (player principal) (moves uint) (reward uint))
+  (let
+    (
+      (current-stats (get-player-stats player))
+      (current-best (get best-moves current-stats))
+      (new-best (if (or (is-eq current-best u0) (< moves current-best)) moves current-best))
+    )
+    (map-set player-stats
+      { player: player }
+      (merge current-stats {
+        completed-games: (+ (get completed-games current-stats) u1),
+        total-moves: (+ (get total-moves current-stats) moves),
+        best-moves: new-best,
+        total-rewards: (+ (get total-rewards current-stats) reward)
+      })
+    )
+  )
+)
