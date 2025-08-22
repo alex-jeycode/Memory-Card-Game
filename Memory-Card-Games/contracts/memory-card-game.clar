@@ -184,3 +184,34 @@
     )
   )
 )
+
+;; NEW FUNCTION: Get games by player (returns last 10 games)
+(define-read-only (get-player-games (player principal))
+  (let
+    (
+      (total-games (var-get game-counter))
+      (start-search (if (> total-games u10) (- total-games u10) u1))
+    )
+    (filter-player-games player start-search total-games (list))
+  )
+)
+
+;; NEW HELPER: Filter games by player
+(define-private (filter-player-games (player principal) (current-id uint) (end-id uint) (acc (list 10 uint)))
+  (if (<= current-id end-id)
+    (let
+      (
+        (game-opt (map-get? games { game-id: current-id }))
+      )
+      (match game-opt
+        game-data 
+        (if (is-eq (get player game-data) player)
+          (filter-player-games player (+ current-id u1) end-id (unwrap-panic (as-max-len? (append acc current-id) u10)))
+          (filter-player-games player (+ current-id u1) end-id acc)
+        )
+        (filter-player-games player (+ current-id u1) end-id acc)
+      )
+    )
+    acc
+  )
+)
