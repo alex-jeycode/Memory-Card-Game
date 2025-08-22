@@ -67,7 +67,7 @@
         moves: u0,
         matches: u0,
         status: "active",
-        start-time: block-height,
+        start-time: stacks-block-height,
         end-time: none,
         revealed-cards: (list u0 u0 u0 u0 u0 u0 u0 u0 u0 u0 u0 u0 u0 u0 u0 u0),
         card-positions: shuffled-deck
@@ -93,7 +93,7 @@
     
     (let
       (
-        (new-revealed (map replace-at-index revealed-list position u1))
+        (new-revealed (replace-at-index revealed-list position u1))
         (new-moves (+ (get moves game) u1))
       )
       (map-set games
@@ -128,7 +128,7 @@
       (merge game {
         matches: new-matches,
         status: new-status,
-        end-time: (if game-complete (some block-height) none)
+        end-time: (if game-complete (some stacks-block-height) none)
       })
     )
     
@@ -165,7 +165,7 @@
       { game-id: game-id }
       (merge game { 
         status: "forfeited",
-        end-time: (some block-height)
+        end-time: (some stacks-block-height)
       })
     )
     
@@ -201,14 +201,22 @@
   (map update-list-element 
     lst 
     (list u0 u1 u2 u3 u4 u5 u6 u7 u8 u9 u10 u11 u12 u13 u14 u15)
-    (list index index index index index index index index index index index index index index index index)
-    (list new-val new-val new-val new-val new-val new-val new-val new-val new-val new-val new-val new-val new-val new-val new-val new-val)
+    (make-list u16 index)
+    (make-list u16 new-val)
   )
 )
 
 ;; Helper for replace-at-index
 (define-private (update-list-element (current-val uint) (current-index uint) (target-index uint) (new-val uint))
   (if (is-eq current-index target-index) new-val current-val)
+)
+
+;; Helper to create a list filled with the same value
+(define-private (make-list (length uint) (value uint))
+  (if (is-eq length u16)
+    (list value value value value value value value value value value value value value value value value)
+    (list)
+  )
 )
 
 ;; Update player stats when starting a game
