@@ -250,3 +250,34 @@
     contract-balance: (stx-get-balance (as-contract tx-sender))
   }
 )
+
+;; NEW DATA MAP: Leaderboard tracking
+(define-map leaderboard
+  { position: uint }
+  { player: principal, best-score: uint }
+)
+
+;; NEW FUNCTION: Get top players leaderboard
+(define-read-only (get-leaderboard (count uint))
+  (let
+    (
+      (max-count (if (> count u10) u10 count)) ;; Limit to 10 entries
+    )
+    (get-leaderboard-entries u1 max-count (list))
+  )
+)
+
+;; NEW HELPER: Get leaderboard entries
+(define-private (get-leaderboard-entries (position uint) (max-position uint) (acc (list 10 { player: principal, score: uint })))
+  (if (<= position max-position)
+    (match (map-get? leaderboard { position: position })
+      entry (get-leaderboard-entries 
+        (+ position u1) 
+        max-position 
+        (unwrap-panic (as-max-len? (append acc { player: (get player entry), score: (get best-score entry) }) u10))
+      )
+      (get-leaderboard-entries (+ position u1) max-position acc)
+    )
+    acc
+  )
+)
