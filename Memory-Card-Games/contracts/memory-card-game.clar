@@ -215,3 +215,38 @@
     acc
   )
 )
+
+;; NEW DATA VARIABLE: Track total rewards paid out
+(define-data-var total-rewards-paid uint u0)
+
+;; MODIFIED: Update claim-reward to track total payouts
+(define-public (claim-reward (game-id uint))
+  (let
+    (
+      (game (unwrap! (map-get? games { game-id: game-id }) ERR_GAME_NOT_FOUND))
+      (reward-info (unwrap! (map-get? game-rewards { game-id: game-id }) ERR_GAME_NOT_FOUND))
+    )
+    (asserts! (is-eq tx-sender (get player game)) ERR_UNAUTHORIZED)
+    (asserts! (is-eq (get status game) "completed") ERR_GAME_FINISHED)
+    (asserts! (not (get claimed reward-info)) ERR_UNAUTHORIZED)
+    
+    (map-set game-rewards
+      { game-id: game-id }
+      (merge reward-info { claimed: true })
+    )
+    
+    ;; NEW: Track total rewards paid
+    (var-set total-rewards-paid (+ (var-get total-rewards-paid) (get reward-amount reward-info)))
+    (try! (as-contract (stx-transfer? (get reward-amount reward-info) tx-sender (get player game))))
+    (ok (get reward-amount reward-info))
+  )
+)
+
+;; NEW FUNCTION: Get contract statistics
+(define-read-only (get-contract-stats)
+  {
+    total-games: (var-get game-counter),
+    total-rewards-paid: (var-get total-rewards-paid),
+    contract-balance: (stx-get-balance (as-contract tx-sender))
+  }
+)
